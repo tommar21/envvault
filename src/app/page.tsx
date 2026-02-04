@@ -10,7 +10,7 @@ export default function Home() {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <Lock className="h-6 w-6" />
-            <span className="text-xl font-bold">EnvVault</span>
+            <span className="text-xl font-bold">SecretBox</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/login">
@@ -92,7 +92,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} EnvVault. Open source.</p>
+          <p>&copy; {new Date().getFullYear()} SecretBox. Open source.</p>
         </div>
       </footer>
     </div>

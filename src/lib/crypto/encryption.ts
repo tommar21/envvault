@@ -1,5 +1,5 @@
 /**
- * EnvVault Encryption Module
+ * SecretBox Encryption Module
  *
  * Uses Web Crypto API for end-to-end encryption.
  * All encryption/decryption happens in the browser.

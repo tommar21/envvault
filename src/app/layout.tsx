@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EnvVault - Secure Environment Variables",
+  title: "SecretBox - Secure Environment Variables",
   description:
     "Centralize all your environment variables in one secure place. End-to-end encrypted.",
 };

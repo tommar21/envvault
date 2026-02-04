@@ -10,7 +10,7 @@ declare module "next-auth" {
   }
 }
 
-// EnvVault Types
+// SecretBox Types
 
 export interface DecryptedVariable {
   id: string;

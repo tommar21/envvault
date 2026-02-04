@@ -34,7 +34,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         </Button>
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5" />
-          <span className="font-bold">EnvVault</span>
+          <span className="font-bold">SecretBox</span>
         </div>
       </div>
 
@@ -88,7 +88,7 @@ function Sidebar({
         <div className="flex h-14 items-center justify-between gap-2 border-b px-4 md:h-16">
           <div className="flex items-center gap-2">
             <Lock className="h-6 w-6" />
-            <span className="text-xl font-bold">EnvVault</span>
+            <span className="text-xl font-bold">SecretBox</span>
           </div>
           <Button
             variant="ghost"

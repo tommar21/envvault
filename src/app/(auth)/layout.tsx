@@ -12,7 +12,7 @@ export default function AuthLayout({
         <div className="container mx-auto flex h-16 items-center px-4">
           <Link href="/" className="flex items-center gap-2">
             <Lock className="h-6 w-6" />
-            <span className="text-xl font-bold">EnvVault</span>
+            <span className="text-xl font-bold">SecretBox</span>
           </Link>
         </div>
       </header>
