@@ -43,6 +43,7 @@ import { useVaultStore } from "@/stores/vault-store";
 import { encryptVariable, decryptVariable } from "@/lib/crypto/encryption";
 import { createVariable, deleteVariable } from "@/lib/actions/variables";
 import { deleteProject } from "@/lib/actions/projects";
+import { ImportEnvDialog } from "@/components/import-env-dialog";
 import { toast } from "sonner";
 import type { Variable, Environment, Project, GlobalVariable, ProjectGlobal } from "@prisma/client";
 
@@ -193,18 +194,30 @@ export function ProjectView({ project }: ProjectViewProps) {
               </TabsTrigger>
             ))}
           </TabsList>
-          <AddVariableDialog
-            environmentId={activeEnv}
-            cryptoKey={cryptoKey}
-            onSuccess={() => {
-              // Clear cache to force re-fetch
-              setDecryptedVars((prev) => {
-                const next = { ...prev };
-                delete next[activeEnv];
-                return next;
-              });
-            }}
-          />
+          <div className="flex items-center gap-2">
+            <ImportEnvDialog
+              environmentId={activeEnv}
+              cryptoKey={cryptoKey}
+              onSuccess={() => {
+                setDecryptedVars((prev) => {
+                  const next = { ...prev };
+                  delete next[activeEnv];
+                  return next;
+                });
+              }}
+            />
+            <AddVariableDialog
+              environmentId={activeEnv}
+              cryptoKey={cryptoKey}
+              onSuccess={() => {
+                setDecryptedVars((prev) => {
+                  const next = { ...prev };
+                  delete next[activeEnv];
+                  return next;
+                });
+              }}
+            />
+          </div>
         </div>
 
         {project.environments.map((env) => (
