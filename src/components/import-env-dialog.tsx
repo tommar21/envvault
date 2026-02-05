@@ -56,9 +56,9 @@ export function ImportEnvDialog({
     setIsLoading(true);
 
     try {
-      // Encrypt and save each variable
+      // Encrypt and save each variable - track failures with details
       let successCount = 0;
-      let errorCount = 0;
+      const failedVars: Array<{ key: string; error: string }> = [];
 
       for (const { key, value } of parsedVars) {
         try {
@@ -68,13 +68,25 @@ export function ImportEnvDialog({
             isSecret: isLikelySecret(key),
           });
           successCount++;
-        } catch {
-          errorCount++;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          failedVars.push({ key, error: errorMessage });
+          logger.error(`Failed to import variable: ${key}`, error);
         }
       }
 
-      if (errorCount > 0) {
-        toast.warning(`Imported ${successCount} variables, ${errorCount} failed`);
+      if (failedVars.length > 0) {
+        // Show detailed error message with failed variable names
+        const failedKeys = failedVars.map((v) => v.key).join(", ");
+        toast.warning(
+          `Imported ${successCount} variables. Failed: ${failedKeys}`,
+          {
+            description: failedVars.length === 1
+              ? `Error: ${failedVars[0].error}`
+              : `${failedVars.length} variables failed to import`,
+            duration: 6000,
+          }
+        );
       } else {
         toast.success(`Imported ${successCount} variables`);
       }

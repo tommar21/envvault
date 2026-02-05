@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { verifyTOTPCode } from "@/lib/totp";
+import { verifyTOTPCode, generateBackupCodes, formatBackupCode } from "@/lib/totp";
 import { logAudit } from "@/lib/audit";
 import { totpCodeSchema, validateInput } from "@/lib/validation/schemas";
+import { hashBackupCode } from "@/lib/backup-codes";
 
 export async function POST(req: Request) {
   try {
@@ -53,11 +54,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Enable 2FA if not already enabled
+    // Enable 2FA if not already enabled and generate backup codes
     if (!user.twoFactorEnabled) {
+      // Generate backup codes
+      const backupCodes = generateBackupCodes(8);
+      const hashedBackupCodes = await Promise.all(
+        backupCodes.map((code) => hashBackupCode(code))
+      );
+
       await db.user.update({
         where: { id: session.user.id },
-        data: { twoFactorEnabled: true },
+        data: {
+          twoFactorEnabled: true,
+          twoFactorBackupCodes: hashedBackupCodes,
+        },
       });
 
       // Log the event
@@ -67,11 +77,18 @@ export async function POST(req: Request) {
         resource: "SETTINGS",
         request: req,
       });
+
+      // Return backup codes (only shown once)
+      return NextResponse.json({
+        success: true,
+        message: "Two-factor authentication enabled successfully",
+        backupCodes: backupCodes.map(formatBackupCode),
+      });
     }
 
     return NextResponse.json({
       success: true,
-      message: "Two-factor authentication enabled successfully",
+      message: "Two-factor authentication verified",
     });
   } catch (error) {
     logger.error("2FA verify error", error);

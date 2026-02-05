@@ -74,11 +74,14 @@ export async function checkRateLimit(
       reset: result.reset,
     };
   } catch (error) {
-    // If rate limiting fails (e.g., Upstash permission error), allow the request
-    // This is a "fail open" approach - we don't want to block legitimate users
-    // if there's an issue with the rate limiting service
+    // SECURITY: Fail-closed approach - if rate limiting fails, reject the request
+    // This prevents potential abuse if the rate limiting service is unavailable
     console.error("[Rate Limit] Error checking rate limit:", error);
-    return { success: true, remaining: -1, reset: Date.now() };
+    return {
+      success: false,
+      remaining: 0,
+      reset: Date.now() + 60000 // Retry after 1 minute
+    };
   }
 }
 

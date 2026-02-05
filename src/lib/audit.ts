@@ -80,7 +80,20 @@ export async function logAudit({
     });
   } catch (error) {
     // Don't fail the main operation if audit logging fails
-    logger.error("Failed to create audit log", error);
+    // But log prominently for monitoring/alerting
+    logger.error("CRITICAL: Failed to create audit log - this may indicate database issues", error);
+
+    // In production, you may want to send this to an external alerting service
+    if (process.env.NODE_ENV === "production") {
+      // Log additional context for debugging
+      console.error("[AUDIT_FAILURE]", {
+        userId,
+        action,
+        resource,
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 }
 

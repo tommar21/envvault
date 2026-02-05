@@ -57,8 +57,9 @@ model User {
   auditLogs      AuditLog[]
 
   // Two-Factor Authentication
-  twoFactorEnabled Boolean  @default(false)
-  twoFactorSecret  String?  // Encrypted TOTP secret
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorSecret      String?  // Encrypted TOTP secret
+  twoFactorBackupCodes String[] // Hashed backup codes for account recovery
 
   // Teams & API
   ownedTeams    Team[]       @relation("TeamOwner")

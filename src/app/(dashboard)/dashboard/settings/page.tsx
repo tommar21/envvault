@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,8 +24,16 @@ import { Loader2, Key, Clock, Shield, ShieldCheck, ShieldAlert, AlertTriangle, C
 import Link from "next/link";
 import { useVaultStore } from "@/stores/vault-store";
 import { toast } from "sonner";
-import { TwoFactorSetup } from "@/components/two-factor-setup";
-import { TwoFactorDisable } from "@/components/two-factor-disable";
+
+// Lazy load heavy 2FA components
+const TwoFactorSetup = dynamic(
+  () => import("@/components/two-factor-setup").then((mod) => mod.TwoFactorSetup),
+  { loading: () => <Loader2 className="h-4 w-4 animate-spin" /> }
+);
+const TwoFactorDisable = dynamic(
+  () => import("@/components/two-factor-disable").then((mod) => mod.TwoFactorDisable),
+  { loading: () => <Loader2 className="h-4 w-4 animate-spin" /> }
+);
 import {
   generateSalt,
   deriveKey,

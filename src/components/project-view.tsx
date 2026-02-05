@@ -4,7 +4,6 @@ import { useState, memo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -14,15 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -30,7 +20,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft,
-  Plus,
   Download,
   Trash2,
   MoreVertical,
@@ -45,29 +34,20 @@ import {
   FileCode,
 } from "lucide-react";
 import { useVaultStore } from "@/stores/vault-store";
-import { encryptVariable, decryptVariable } from "@/lib/crypto/encryption";
-import { createVariable, deleteVariable, updateVariable } from "@/lib/actions/variables";
-import { deleteProject, createEnvironment, deleteEnvironment } from "@/lib/actions/projects";
+import { decryptVariable } from "@/lib/crypto/encryption";
+import { deleteVariable } from "@/lib/actions/variables";
+import { deleteProject, deleteEnvironment } from "@/lib/actions/projects";
 import { ImportEnvDialog } from "@/components/import-env-dialog";
+import { EditVariableDialog } from "@/components/dialogs/edit-variable-dialog";
+import { AddVariableDialog } from "@/components/dialogs/add-variable-dialog";
+import { AddEnvironmentDialog } from "@/components/dialogs/add-environment-dialog";
 import { useConfirm } from "@/hooks/use-confirm";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
-import type { Variable, Environment, Project, GlobalVariable, ProjectGlobal } from "@prisma/client";
-
-type ProjectWithRelations = Project & {
-  environments: (Environment & { variables: Variable[] })[];
-  linkedGlobals: (ProjectGlobal & { global: GlobalVariable })[];
-};
+import type { DecryptedVar, ProjectWithRelations } from "@/types/variables";
 
 interface ProjectViewProps {
   project: ProjectWithRelations;
-}
-
-interface DecryptedVar {
-  id: string;
-  key: string;
-  value: string;
-  isSecret: boolean;
 }
 
 export function ProjectView({ project }: ProjectViewProps) {
@@ -81,33 +61,36 @@ export function ProjectView({ project }: ProjectViewProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
 
-  // Decrypt variables for an environment
-  async function decryptEnvVariables(envId: string) {
-    if (!cryptoKey || decryptedVars[envId]) return;
+  // Decrypt variables for an environment - memoized to prevent unnecessary re-renders
+  const decryptEnvVariables = useCallback(
+    async (envId: string) => {
+      if (!cryptoKey) return;
 
-    const env = project.environments.find((e) => e.id === envId);
-    if (!env) return;
+      const env = project.environments.find((e) => e.id === envId);
+      if (!env) return;
 
-    try {
-      const decrypted = await Promise.all(
-        env.variables.map(async (v) => {
-          const { key, value } = await decryptVariable(
-            v.keyEncrypted,
-            v.valueEncrypted,
-            v.ivKey,
-            v.ivValue,
-            cryptoKey
-          );
-          return { id: v.id, key, value, isSecret: v.isSecret };
-        })
-      );
+      try {
+        const decrypted = await Promise.all(
+          env.variables.map(async (v) => {
+            const { key, value } = await decryptVariable(
+              v.keyEncrypted,
+              v.valueEncrypted,
+              v.ivKey,
+              v.ivValue,
+              cryptoKey
+            );
+            return { id: v.id, key, value, isSecret: v.isSecret };
+          })
+        );
 
-      setDecryptedVars((prev) => ({ ...prev, [envId]: decrypted }));
-    } catch (error) {
-      logger.error("Failed to decrypt variables", error);
-      toast.error("Failed to decrypt variables");
-    }
-  }
+        setDecryptedVars((prev) => ({ ...prev, [envId]: decrypted }));
+      } catch (error) {
+        logger.error("Failed to decrypt variables", error);
+        toast.error("Failed to decrypt variables");
+      }
+    },
+    [cryptoKey, project.environments]
+  );
 
   // Load variables when tab changes
   function handleTabChange(envId: string) {
@@ -119,8 +102,7 @@ export function ProjectView({ project }: ProjectViewProps) {
     if (activeEnv && !decryptedVars[activeEnv] && cryptoKey) {
       decryptEnvVariables(activeEnv);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeEnv, cryptoKey]);
+  }, [activeEnv, cryptoKey, decryptEnvVariables, decryptedVars]);
 
   async function handleDeleteProject() {
     const confirmed = await confirm({
@@ -553,229 +535,6 @@ const VariableRow = memo(function VariableRow({
   );
 });
 
-const EditVariableDialog = memo(function EditVariableDialog({
-  open,
-  onOpenChange,
-  variable,
-  cryptoKey,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  variable: DecryptedVar;
-  cryptoKey: CryptoKey | null;
-  onSuccess: (updated: DecryptedVar) => void;
-}) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [key, setKey] = useState(variable.key);
-  const [value, setValue] = useState(variable.value);
-  const [isSecret, setIsSecret] = useState(variable.isSecret);
-
-  // Reset form when dialog opens with new variable
-  useEffect(() => {
-    if (open) {
-      setKey(variable.key);
-      setValue(variable.value);
-      setIsSecret(variable.isSecret);
-    }
-  }, [open, variable]);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!cryptoKey) return;
-
-    setIsLoading(true);
-
-    try {
-      const encrypted = await encryptVariable(key, value, cryptoKey);
-
-      await updateVariable(variable.id, {
-        ...encrypted,
-        isSecret,
-      });
-
-      toast.success("Variable updated");
-      onOpenChange(false);
-      onSuccess({ id: variable.id, key, value, isSecret });
-    } catch (error) {
-      logger.error("Failed to update variable", error);
-      toast.error("Failed to update variable");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Variable</DialogTitle>
-          <DialogDescription>
-            Update the variable. Changes will be encrypted before saving.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="edit-key" className="text-sm font-medium">
-                Key
-              </label>
-              <Input
-                id="edit-key"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                placeholder="DATABASE_URL"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="edit-value" className="text-sm font-medium">
-                Value
-              </label>
-              <Input
-                id="edit-value"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="postgresql://..."
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="edit-isSecret"
-                checked={isSecret}
-                onChange={(e) => setIsSecret(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <label htmlFor="edit-isSecret" className="text-sm">
-                Mark as secret (hide value by default)
-              </label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !cryptoKey}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-});
-
-const AddVariableDialog = memo(function AddVariableDialog({
-  environmentId,
-  cryptoKey,
-  onSuccess,
-}: {
-  environmentId: string;
-  cryptoKey: CryptoKey | null;
-  onSuccess: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!cryptoKey) return;
-
-    setIsLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const key = formData.get("key") as string;
-    const value = formData.get("value") as string;
-    const isSecret = formData.get("isSecret") === "on";
-
-    try {
-      const encrypted = await encryptVariable(key, value, cryptoKey);
-
-      await createVariable(environmentId, {
-        ...encrypted,
-        isSecret,
-      });
-
-      toast.success("Variable added");
-      setOpen(false);
-      onSuccess();
-    } catch (error) {
-      logger.error("Failed to add variable", error);
-      toast.error("Failed to add variable");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Variable
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Variable</DialogTitle>
-          <DialogDescription>
-            Add a new environment variable. It will be encrypted before saving.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="key" className="text-sm font-medium">
-                Key
-              </label>
-              <Input
-                id="key"
-                name="key"
-                placeholder="DATABASE_URL"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="value" className="text-sm font-medium">
-                Value
-              </label>
-              <Input
-                id="value"
-                name="value"
-                placeholder="postgresql://..."
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isSecret"
-                name="isSecret"
-                className="h-4 w-4"
-              />
-              <label htmlFor="isSecret" className="text-sm">
-                Mark as secret (hide value by default)
-              </label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={isLoading || !cryptoKey}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Variable
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-});
 
 const ExportButton = memo(function ExportButton({
   project,
@@ -839,92 +598,8 @@ const ExportButton = memo(function ExportButton({
   );
 });
 
-const AddEnvironmentDialog = memo(function AddEnvironmentDialog({
-  projectId,
-  onSuccess,
-}: {
-  projectId: string;
-  onSuccess: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [name, setName] = useState("");
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      // Validate name (lowercase, no spaces)
-      const cleanName = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      if (!cleanName) {
-        toast.error("Please enter a valid environment name");
-        setIsLoading(false);
-        return;
-      }
-
-      await createEnvironment(projectId, cleanName);
-      toast.success("Environment created");
-      setOpen(false);
-      setName("");
-      onSuccess();
-    } catch (error) {
-      logger.error("Failed to create environment", error);
-      toast.error("Failed to create environment");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Plus className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Environment</DialogTitle>
-          <DialogDescription>
-            Create a new environment for this project (e.g., qa, demo, preview).
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="env-name" className="text-sm font-medium">
-                Environment Name
-              </label>
-              <Input
-                id="env-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="qa"
-                required
-                disabled={isLoading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Use lowercase letters, numbers, and hyphens only.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !name.trim()}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Environment
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-});
-
-function DeleteEnvironmentButton({
+const DeleteEnvironmentButton = memo(function DeleteEnvironmentButton({
   environmentId,
   environmentName,
   variableCount,
@@ -979,4 +654,4 @@ function DeleteEnvironmentButton({
       <ConfirmDialog />
     </>
   );
-}
+});
