@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
 import { useVaultStore } from "@/stores/vault-store";
+import { logger } from "@/lib/logger";
 
 export function UnlockVault() {
   const [masterPassword, setMasterPassword] = useState("");
@@ -48,7 +49,7 @@ export function UnlockVault() {
       // Clear the password from memory
       setMasterPassword("");
     } catch (err) {
-      console.error("Unlock error:", err);
+      logger.error("Unlock error", err);
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

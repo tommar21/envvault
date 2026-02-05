@@ -16,6 +16,7 @@ import { parseEnvFile } from "@/lib/env-parser";
 import { encryptVariable } from "@/lib/crypto/encryption";
 import { createVariable } from "@/lib/actions/variables";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface ImportEnvDialogProps {
   environmentId: string;
@@ -83,7 +84,7 @@ export function ImportEnvDialog({
       setFileName("");
       onSuccess();
     } catch (error) {
-      console.error(error);
+      logger.error("Failed to import variables", error);
       toast.error("Failed to import variables");
     } finally {
       setIsLoading(false);

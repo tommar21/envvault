@@ -9,10 +9,11 @@ interface ProjectPageProps {
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { id } = await params;
 
-  try {
-    const project = await getProject(id);
-    return <ProjectView project={project} />;
-  } catch {
+  const project = await getProject(id).catch(() => null);
+
+  if (!project) {
     notFound();
   }
+
+  return <ProjectView project={project} />;
 }

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
+import { registerLimiter, getClientIp, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { registerSchema, validateInput } from "@/lib/validation/schemas";
 
 // Generate a random salt (16 bytes, base64 encoded)
 function generateSalt(): string {
@@ -11,19 +14,36 @@ function generateSalt(): string {
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, masterPassword } = await req.json();
+    // Check rate limit
+    const ip = getClientIp(req);
+    const rateLimitResult = await checkRateLimit(registerLimiter, ip);
 
-    // Validate input
-    if (!name || !email || !password || !masterPassword) {
+    if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: "Too many registration attempts. Please try again later." },
+        {
+          status: 429,
+          headers: rateLimitHeaders(rateLimitResult.remaining ?? 0, rateLimitResult.reset ?? 0),
+        }
+      );
+    }
+
+    // Parse and validate input
+    const body = await req.json();
+    const validation = validateInput(registerSchema, body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
         { status: 400 }
       );
     }
 
+    const { name, email, password, masterPassword } = validation.data;
+
     // Check if user already exists
     const existingUser = await db.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase() },
     });
 
     if (existingUser) {
@@ -44,7 +64,7 @@ export async function POST(req: Request) {
     const user = await db.user.create({
       data: {
         name,
-        email,
+        email: email.toLowerCase(),
         password: hashedPassword,
         masterPassword: hashedMasterPassword,
         encryptionSalt,
@@ -57,7 +77,7 @@ export async function POST(req: Request) {
       userId: user.id,
     });
   } catch (error) {
-    console.error("Registration error:", error);
+    logger.error("Registration error", error);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }

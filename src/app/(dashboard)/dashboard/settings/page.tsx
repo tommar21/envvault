@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,14 +19,44 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2, Key, Clock, Shield } from "lucide-react";
+import { Loader2, Key, Clock, Shield, ShieldCheck, ShieldAlert, AlertTriangle, ChevronRight, Code } from "lucide-react";
+import Link from "next/link";
 import { useVaultStore } from "@/stores/vault-store";
 import { toast } from "sonner";
+import { TwoFactorSetup } from "@/components/two-factor-setup";
+import { TwoFactorDisable } from "@/components/two-factor-disable";
+import {
+  generateSalt,
+  deriveKey,
+  encryptVariable,
+  decryptVariable,
+  validateMasterPassword,
+} from "@/lib/crypto/encryption";
 
 export default function SettingsPage() {
   const autoLockMinutes = useVaultStore((state) => state.autoLockMinutes);
   const setAutoLockMinutes = useVaultStore((state) => state.setAutoLockMinutes);
   const [localAutoLock, setLocalAutoLock] = useState(autoLockMinutes.toString());
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+
+  // Fetch 2FA status on mount
+  useEffect(() => {
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/user/status");
+        if (res.ok) {
+          const data = await res.json();
+          setTwoFactorEnabled(data.twoFactorEnabled ?? false);
+        }
+      } catch {
+        // Silently fail - will show as disabled
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    }
+    fetchStatus();
+  }, []);
 
   function handleAutoLockChange() {
     const minutes = parseInt(localAutoLock);
@@ -48,6 +78,61 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Two-Factor Authentication */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {twoFactorEnabled ? (
+                <ShieldCheck className="h-5 w-5 text-green-500" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-yellow-500" />
+              )}
+              Two-Factor Authentication
+            </CardTitle>
+            <CardDescription>
+              Add an extra layer of security to your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingStatus ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-md bg-muted p-4">
+                  <div>
+                    <p className="font-medium">
+                      {twoFactorEnabled ? "Enabled" : "Not enabled"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {twoFactorEnabled
+                        ? "Your account is protected with 2FA"
+                        : "Enable 2FA for additional security"}
+                    </p>
+                  </div>
+                  <div
+                    className={`h-3 w-3 rounded-full ${
+                      twoFactorEnabled ? "bg-green-500" : "bg-yellow-500"
+                    }`}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <TwoFactorSetup
+                    isEnabled={twoFactorEnabled}
+                    onSuccess={() => setTwoFactorEnabled(true)}
+                  />
+                  <TwoFactorDisable
+                    isEnabled={twoFactorEnabled}
+                    onSuccess={() => setTwoFactorEnabled(false)}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Auto-lock settings */}
         <Card>
           <CardHeader>
@@ -98,6 +183,24 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* API Tokens */}
+        <Link href="/dashboard/settings/api-tokens">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Code className="h-5 w-5" />
+                  <CardTitle>API Tokens</CardTitle>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <CardDescription>
+                Create tokens for programmatic access to your secrets
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         {/* Security info */}
         <Card>
           <CardHeader>
@@ -141,10 +244,17 @@ export default function SettingsPage() {
 function ChangeMasterPasswordDialog() {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState<"form" | "processing">("form");
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: "" });
+  const cryptoKey = useVaultStore((state) => state.cryptoKey);
+  const lock = useVaultStore((state) => state.lock);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setIsLoading(true);
+    if (!cryptoKey) {
+      toast.error("Vault must be unlocked to change password");
+      return;
+    }
 
     const formData = new FormData(e.currentTarget);
     const currentPassword = formData.get("currentPassword") as string;
@@ -153,31 +263,147 @@ function ChangeMasterPasswordDialog() {
 
     if (newPassword !== confirmPassword) {
       toast.error("New passwords do not match");
-      setIsLoading(false);
       return;
     }
 
-    if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters");
-      setIsLoading(false);
+    const validation = validateMasterPassword(newPassword);
+    if (!validation.valid) {
+      toast.error(validation.errors[0]);
       return;
     }
 
-    // TODO: Implement password change with re-encryption
-    // This requires:
-    // 1. Verify current password
-    // 2. Decrypt all data with old key
-    // 3. Generate new key from new password
-    // 4. Re-encrypt all data with new key
-    // 5. Update salt in database
+    setIsLoading(true);
+    setStep("processing");
 
-    toast.info("Password change coming soon");
-    setIsLoading(false);
-    setOpen(false);
+    try {
+      // Step 1: Fetch all encrypted data
+      setProgress({ current: 1, total: 5, message: "Fetching encrypted data..." });
+
+      const [projectsRes, globalsRes] = await Promise.all([
+        fetch("/api/projects"),
+        fetch("/api/globals"),
+      ]);
+
+      if (!projectsRes.ok || !globalsRes.ok) {
+        throw new Error("Failed to fetch data");
+      }
+
+      const projects = await projectsRes.json();
+      const globals = await globalsRes.json();
+
+      // Collect all variables
+      const allVariables: Array<{
+        id: string;
+        keyEncrypted: string;
+        valueEncrypted: string;
+        ivKey: string;
+        ivValue: string;
+      }> = [];
+
+      for (const project of projects) {
+        for (const env of project.environments || []) {
+          for (const v of env.variables || []) {
+            allVariables.push(v);
+          }
+        }
+      }
+
+      // Step 2: Decrypt all data with current key
+      setProgress({ current: 2, total: 5, message: `Decrypting ${allVariables.length + globals.length} variables...` });
+
+      const decryptedVariables: Array<{ id: string; key: string; value: string; isSecret: boolean }> = [];
+      const decryptedGlobals: Array<{ id: string; key: string; value: string; isSecret: boolean }> = [];
+
+      for (const v of allVariables) {
+        const decrypted = await decryptVariable(
+          v.keyEncrypted,
+          v.valueEncrypted,
+          v.ivKey,
+          v.ivValue,
+          cryptoKey
+        );
+        decryptedVariables.push({ id: v.id, ...decrypted, isSecret: false });
+      }
+
+      for (const g of globals) {
+        const decrypted = await decryptVariable(
+          g.keyEncrypted,
+          g.valueEncrypted,
+          g.ivKey,
+          g.ivValue,
+          cryptoKey
+        );
+        decryptedGlobals.push({ id: g.id, ...decrypted, isSecret: g.isSecret });
+      }
+
+      // Step 3: Generate new salt and derive new key
+      setProgress({ current: 3, total: 5, message: "Generating new encryption key..." });
+
+      const newSalt = generateSalt();
+      const newCryptoKey = await deriveKey(newPassword, newSalt);
+
+      // Step 4: Re-encrypt all data with new key
+      setProgress({ current: 4, total: 5, message: "Re-encrypting data..." });
+
+      const reencryptedVariables = await Promise.all(
+        decryptedVariables.map(async (v) => {
+          const encrypted = await encryptVariable(v.key, v.value, newCryptoKey);
+          return { id: v.id, ...encrypted };
+        })
+      );
+
+      const reencryptedGlobals = await Promise.all(
+        decryptedGlobals.map(async (g) => {
+          const encrypted = await encryptVariable(g.key, g.value, newCryptoKey);
+          return { id: g.id, ...encrypted };
+        })
+      );
+
+      // Step 5: Send to server
+      setProgress({ current: 5, total: 5, message: "Saving changes..." });
+
+      const response = await fetch("/api/user/change-master-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPasswordHash: currentPassword,
+          newMasterPasswordHash: newPassword,
+          newSalt,
+          variables: reencryptedVariables,
+          globalVariables: reencryptedGlobals,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to change password");
+      }
+
+      toast.success("Master password changed successfully. Please log in again.");
+      setOpen(false);
+
+      // Lock the vault to force re-login with new password
+      lock();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to change password");
+      setStep("form");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleOpenChange(newOpen: boolean) {
+    if (!isLoading) {
+      setOpen(newOpen);
+      if (!newOpen) {
+        setStep("form");
+        setProgress({ current: 0, total: 0, message: "" });
+      }
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline">Change Master Password</Button>
       </DialogTrigger>
@@ -188,52 +414,88 @@ function ChangeMasterPasswordDialog() {
             This will re-encrypt all your data with a new password.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="currentPassword" className="text-sm font-medium">
-                Current Password
-              </label>
-              <Input
-                id="currentPassword"
-                name="currentPassword"
-                type="password"
-                required
-                disabled={isLoading}
-              />
+
+        {step === "form" ? (
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4 py-4">
+              <div className="rounded-md bg-yellow-500/10 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-500" />
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                    Make sure your vault is unlocked before changing the password.
+                    This process will decrypt and re-encrypt all your data.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="currentPassword" className="text-sm font-medium">
+                  Current Master Password
+                </label>
+                <Input
+                  id="currentPassword"
+                  name="currentPassword"
+                  type="password"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="newPassword" className="text-sm font-medium">
+                  New Master Password
+                </label>
+                <Input
+                  id="newPassword"
+                  name="newPassword"
+                  type="password"
+                  required
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  At least 12 characters with uppercase, lowercase, and numbers
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="confirmPassword" className="text-sm font-medium">
+                  Confirm New Password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label htmlFor="newPassword" className="text-sm font-medium">
-                New Password
-              </label>
-              <Input
-                id="newPassword"
-                name="newPassword"
-                type="password"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm New Password
-              </label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                disabled={isLoading}
-              />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || !cryptoKey}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Change Password
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="py-8">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-medium">{progress.message}</p>
+                <p className="text-sm text-muted-foreground">
+                  Step {progress.current} of {progress.total}
+                </p>
+              </div>
+              <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Change Password
-            </Button>
-          </DialogFooter>
-        </form>
+        )}
       </DialogContent>
     </Dialog>
   );

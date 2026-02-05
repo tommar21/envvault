@@ -6,7 +6,7 @@ import type {
   DecryptedGlobalVariable,
 } from "@/types";
 
-export const useVaultStore = create<VaultState>((set, get) => ({
+export const useVaultStore = create<VaultState>((set, _get) => ({
   // Initial state
   isUnlocked: false,
   isLoading: false,

@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lock, LogOut, Settings, FolderKey, Key, LockOpen, Menu, X } from "lucide-react";
+import { Lock, LogOut, Settings, FolderKey, Key, LockOpen, Menu, X, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VaultProvider } from "./vault-provider";
 import { useVaultStore } from "@/stores/vault-store";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { SearchCommand } from "./search-command";
+import { KeyboardShortcutsHelp } from "./keyboard-shortcuts-help";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -16,9 +18,10 @@ interface DashboardShellProps {
     name?: string | null;
     email?: string | null;
   };
+  projects?: Array<{ id: string; name: string }>;
 }
 
-export function DashboardShell({ children, user }: DashboardShellProps) {
+export function DashboardShell({ children, user, projects = [] }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -49,6 +52,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       {/* Sidebar */}
       <Sidebar
         user={user}
+        projects={projects}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -59,16 +63,21 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
           <div className="container mx-auto p-4 md:p-6">{children}</div>
         </VaultProvider>
       </main>
+
+      {/* Global keyboard shortcuts help */}
+      <KeyboardShortcutsHelp />
     </div>
   );
 }
 
 function Sidebar({
   user,
+  projects,
   isOpen,
   onClose,
 }: {
   user: { name?: string | null; email?: string | null };
+  projects: Array<{ id: string; name: string }>;
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -100,6 +109,11 @@ function Sidebar({
           </Button>
         </div>
 
+        {/* Search */}
+        <div className="border-b p-4">
+          <SearchCommand projects={projects} />
+        </div>
+
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-4">
           <NavLink
@@ -119,9 +133,17 @@ function Sidebar({
             Global Variables
           </NavLink>
           <NavLink
+            href="/dashboard/teams"
+            icon={<Users className="h-4 w-4" />}
+            isActive={pathname?.startsWith("/dashboard/teams")}
+            onClick={onClose}
+          >
+            Teams
+          </NavLink>
+          <NavLink
             href="/dashboard/settings"
             icon={<Settings className="h-4 w-4" />}
-            isActive={pathname === "/dashboard/settings"}
+            isActive={pathname?.startsWith("/dashboard/settings")}
             onClick={onClose}
           >
             Settings
@@ -139,6 +161,7 @@ function Sidebar({
             >
               <LockOpen className="h-4 w-4" />
               Lock Vault
+              <kbd className="ml-auto rounded border bg-muted px-1 text-[10px]">⌘L</kbd>
             </Button>
           </div>
         )}

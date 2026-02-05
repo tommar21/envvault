@@ -17,6 +17,7 @@ import {
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createProject } from "@/lib/actions/projects";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function NewProjectPage() {
       toast.success("Project created successfully");
       router.push(`/dashboard/projects/${project.id}`);
     } catch (error) {
-      console.error(error);
+      logger.error("Failed to create project", error);
       toast.error("Failed to create project");
     } finally {
       setIsLoading(false);

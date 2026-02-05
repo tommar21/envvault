@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { logger } from "@/lib/logger";
+import { unlockLimiter, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { unlockSchema, validateInput } from "@/lib/validation/schemas";
 
 export async function POST(req: Request) {
   try {
@@ -11,14 +14,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { masterPassword } = await req.json();
+    // Check rate limit (by user ID to prevent brute force per account)
+    const rateLimitResult = await checkRateLimit(unlockLimiter, session.user.id);
 
-    if (!masterPassword) {
+    if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: "Master password is required" },
+        { error: "Too many unlock attempts. Please try again later." },
+        {
+          status: 429,
+          headers: rateLimitHeaders(rateLimitResult.remaining ?? 0, rateLimitResult.reset ?? 0),
+        }
+      );
+    }
+
+    // Parse and validate input
+    const body = await req.json();
+    const validation = validateInput(unlockSchema, body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
         { status: 400 }
       );
     }
+
+    const { masterPassword } = validation.data;
 
     // Get user with master password hash and salt
     const user = await db.user.findUnique({
@@ -52,7 +72,7 @@ export async function POST(req: Request) {
       salt: user.encryptionSalt,
     });
   } catch (error) {
-    console.error("Unlock error:", error);
+    logger.error("Unlock API error", error);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }

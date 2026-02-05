@@ -49,12 +49,23 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
-  // EnvVault specific
+  // SecretBox specific
   encryptionSalt String?          // Salt para derivar master key (base64)
   masterPassword String?          // Hashed master password (separate from login password)
   projects       Project[]
   globalVars     GlobalVariable[]
-  createdAt      DateTime         @default(now())
+  auditLogs      AuditLog[]
+
+  // Two-Factor Authentication
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?  // Encrypted TOTP secret
+
+  // Teams & API
+  ownedTeams    Team[]       @relation("TeamOwner")
+  teamMembers   TeamMember[]
+  apiTokens     ApiToken[]
+
+  createdAt DateTime @default(now())
 }
 
 model VerificationToken {
@@ -77,6 +88,7 @@ model Project {
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   environments  Environment[]
   linkedGlobals ProjectGlobal[]
+  teams         TeamProject[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -132,4 +144,85 @@ model ProjectGlobal {
   global    GlobalVariable @relation(fields: [globalId], references: [id], onDelete: Cascade)
 
   @@id([projectId, globalId])
+}
+
+// ============================================
+// Security & Audit Models
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String   // LOGIN, LOGOUT, UNLOCK_VAULT, CREATE_PROJECT, etc.
+  resource   String?  // Resource type (PROJECT, VARIABLE, etc.)
+  resourceId String?  // Resource ID
+  metadata   Json?    // Additional context
+  ipAddress  String?
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// Teams & Collaboration Models
+// ============================================
+
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+  projects  TeamProject[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      String   @default("MEMBER") // ADMIN, MEMBER, VIEWER
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model TeamProject {
+  teamId    String
+  projectId String
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, projectId])
+}
+
+// ============================================
+// API Tokens Model
+// ============================================
+
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  tokenHash   String    @unique  // SHA-256 hash of the token
+  tokenPrefix String              // First 8 chars for identification (sb_xxxx)
+  permissions String[]            // READ, WRITE
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
 }
