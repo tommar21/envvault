@@ -1,19 +1,19 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import {
+  requireAuth,
+  requireProjectOwnership,
+  requireEnvironmentOwnership,
+} from "@/lib/auth-helpers";
 
 export async function createProject(data: { name: string; path?: string }) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   const project = await db.project.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: data.name,
       path: data.path || null,
       environments: {
@@ -38,20 +38,8 @@ export async function updateProject(
   projectId: string,
   data: { name?: string; path?: string }
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const existing = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  });
-
-  if (!existing) {
-    throw new Error("Project not found");
-  }
+  const userId = await requireAuth();
+  await requireProjectOwnership(projectId, userId);
 
   const project = await db.project.update({
     where: { id: projectId },
@@ -68,20 +56,8 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const existing = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  });
-
-  if (!existing) {
-    throw new Error("Project not found");
-  }
+  const userId = await requireAuth();
+  await requireProjectOwnership(projectId, userId);
 
   await db.project.delete({
     where: { id: projectId },
@@ -91,14 +67,10 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function getProject(projectId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   const project = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
+    where: { id: projectId, userId },
     include: {
       environments: {
         include: {
@@ -124,20 +96,8 @@ export async function getProject(projectId: string) {
 }
 
 export async function createEnvironment(projectId: string, name: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const project = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  });
-
-  if (!project) {
-    throw new Error("Project not found");
-  }
+  const userId = await requireAuth();
+  await requireProjectOwnership(projectId, userId);
 
   const environment = await db.environment.create({
     data: {
@@ -152,21 +112,8 @@ export async function createEnvironment(projectId: string, name: string) {
 }
 
 export async function deleteEnvironment(environmentId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership through project
-  const environment = await db.environment.findFirst({
-    where: { id: environmentId },
-    include: { project: true },
-  });
-
-  if (!environment || environment.project.userId !== session.user.id) {
-    throw new Error("Environment not found");
-  }
+  const userId = await requireAuth();
+  const environment = await requireEnvironmentOwnership(environmentId, userId);
 
   await db.environment.delete({
     where: { id: environmentId },

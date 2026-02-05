@@ -1,8 +1,14 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import {
+  requireAuth,
+  requireEnvironmentOwnership,
+  requireVariableOwnership,
+  requireGlobalVariableOwnership,
+  requireProjectOwnership,
+} from "@/lib/auth-helpers";
 
 interface EncryptedVariableData {
   keyEncrypted: string;
@@ -16,21 +22,8 @@ export async function createVariable(
   environmentId: string,
   data: EncryptedVariableData
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership through environment -> project
-  const environment = await db.environment.findFirst({
-    where: { id: environmentId },
-    include: { project: true },
-  });
-
-  if (!environment || environment.project.userId !== session.user.id) {
-    throw new Error("Environment not found");
-  }
+  const userId = await requireAuth();
+  const environment = await requireEnvironmentOwnership(environmentId, userId);
 
   const variable = await db.variable.create({
     data: {
@@ -52,21 +45,8 @@ export async function updateVariable(
   variableId: string,
   data: Partial<EncryptedVariableData>
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const variable = await db.variable.findFirst({
-    where: { id: variableId },
-    include: { environment: { include: { project: true } } },
-  });
-
-  if (!variable || variable.environment.project.userId !== session.user.id) {
-    throw new Error("Variable not found");
-  }
+  const userId = await requireAuth();
+  const variable = await requireVariableOwnership(variableId, userId);
 
   const updated = await db.variable.update({
     where: { id: variableId },
@@ -85,21 +65,8 @@ export async function updateVariable(
 }
 
 export async function deleteVariable(variableId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const variable = await db.variable.findFirst({
-    where: { id: variableId },
-    include: { environment: { include: { project: true } } },
-  });
-
-  if (!variable || variable.environment.project.userId !== session.user.id) {
-    throw new Error("Variable not found");
-  }
+  const userId = await requireAuth();
+  const variable = await requireVariableOwnership(variableId, userId);
 
   await db.variable.delete({
     where: { id: variableId },
@@ -111,15 +78,11 @@ export async function deleteVariable(variableId: string) {
 // Global Variables
 
 export async function createGlobalVariable(data: EncryptedVariableData) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   const variable = await db.globalVariable.create({
     data: {
-      userId: session.user.id,
+      userId,
       keyEncrypted: data.keyEncrypted,
       valueEncrypted: data.valueEncrypted,
       ivKey: data.ivKey,
@@ -137,20 +100,8 @@ export async function updateGlobalVariable(
   variableId: string,
   data: Partial<EncryptedVariableData>
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const variable = await db.globalVariable.findFirst({
-    where: { id: variableId, userId: session.user.id },
-  });
-
-  if (!variable) {
-    throw new Error("Variable not found");
-  }
+  const userId = await requireAuth();
+  await requireGlobalVariableOwnership(variableId, userId);
 
   const updated = await db.globalVariable.update({
     where: { id: variableId },
@@ -169,20 +120,8 @@ export async function updateGlobalVariable(
 }
 
 export async function deleteGlobalVariable(variableId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const variable = await db.globalVariable.findFirst({
-    where: { id: variableId, userId: session.user.id },
-  });
-
-  if (!variable) {
-    throw new Error("Variable not found");
-  }
+  const userId = await requireAuth();
+  await requireGlobalVariableOwnership(variableId, userId);
 
   await db.globalVariable.delete({
     where: { id: variableId },
@@ -192,14 +131,10 @@ export async function deleteGlobalVariable(variableId: string) {
 }
 
 export async function getGlobalVariables() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   return db.globalVariable.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     include: {
       projects: {
         include: {
@@ -215,25 +150,13 @@ export async function linkGlobalToProject(
   globalId: string,
   projectId: string
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   // Verify ownership of both
-  const [global, project] = await Promise.all([
-    db.globalVariable.findFirst({
-      where: { id: globalId, userId: session.user.id },
-    }),
-    db.project.findFirst({
-      where: { id: projectId, userId: session.user.id },
-    }),
+  await Promise.all([
+    requireGlobalVariableOwnership(globalId, userId),
+    requireProjectOwnership(projectId, userId),
   ]);
-
-  if (!global || !project) {
-    throw new Error("Not found");
-  }
 
   await db.projectGlobal.create({
     data: {
@@ -250,20 +173,8 @@ export async function unlinkGlobalFromProject(
   globalId: string,
   projectId: string
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify ownership
-  const project = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  });
-
-  if (!project) {
-    throw new Error("Project not found");
-  }
+  const userId = await requireAuth();
+  await requireProjectOwnership(projectId, userId);
 
   await db.projectGlobal.delete({
     where: {

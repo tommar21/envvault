@@ -1,9 +1,9 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { requireAuth } from "@/lib/auth-helpers";
 import crypto from "crypto";
 
 export type ApiPermission = "READ" | "WRITE";
@@ -26,11 +26,7 @@ function hashToken(token: string): string {
 }
 
 export async function createApiToken(data: CreateTokenInput) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   // Generate the actual token
   const token = generateToken();
@@ -39,7 +35,7 @@ export async function createApiToken(data: CreateTokenInput) {
 
   const apiToken = await db.apiToken.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: data.name,
       tokenHash,
       tokenPrefix,
@@ -49,7 +45,7 @@ export async function createApiToken(data: CreateTokenInput) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "CREATE_VARIABLE",
     resource: "API_TOKEN",
     resourceId: apiToken.id,
@@ -71,14 +67,10 @@ export async function createApiToken(data: CreateTokenInput) {
 }
 
 export async function getApiTokens() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   const tokens = await db.apiToken.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     select: {
       id: true,
       name: true,
@@ -95,14 +87,10 @@ export async function getApiTokens() {
 }
 
 export async function deleteApiToken(tokenId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   const token = await db.apiToken.findFirst({
-    where: { id: tokenId, userId: session.user.id },
+    where: { id: tokenId, userId },
   });
 
   if (!token) {
@@ -114,7 +102,7 @@ export async function deleteApiToken(tokenId: string) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "DELETE_VARIABLE",
     resource: "API_TOKEN",
     resourceId: tokenId,

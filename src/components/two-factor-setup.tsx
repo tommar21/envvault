@@ -149,7 +149,15 @@ export function TwoFactorSetup({ isEnabled, onSuccess }: TwoFactorSetupProps) {
             <div className="space-y-4 py-4">
               {qrCode && (
                 <div className="flex justify-center">
-                  <img src={qrCode} alt="2FA QR Code" className="rounded-lg" />
+                  {/* Using img for data URL - Next.js Image doesn't optimize data URLs */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrCode}
+                    alt="Scan this QR code with your authenticator app"
+                    className="rounded-lg"
+                    width={200}
+                    height={200}
+                  />
                 </div>
               )}
 

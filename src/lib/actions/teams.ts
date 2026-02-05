@@ -1,9 +1,9 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { requireAuth, requireProjectOwnership } from "@/lib/auth-helpers";
 
 export type TeamRole = "ADMIN" | "MEMBER" | "VIEWER";
 
@@ -17,20 +17,65 @@ interface InviteMemberInput {
   role: TeamRole;
 }
 
-export async function createTeam(data: CreateTeamInput) {
-  const session = await auth();
+/**
+ * Helper to verify team admin access
+ */
+async function requireTeamAdminAccess(teamId: string, userId: string) {
+  const team = await db.team.findFirst({
+    where: {
+      id: teamId,
+      OR: [
+        { ownerId: userId },
+        {
+          members: {
+            some: {
+              userId,
+              role: "ADMIN",
+            },
+          },
+        },
+      ],
+    },
+  });
 
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
+  if (!team) {
+    throw new Error("Team not found or you don't have permission");
   }
+
+  return team;
+}
+
+/**
+ * Helper to verify team membership (any role)
+ */
+async function requireTeamMemberAccess(teamId: string, userId: string) {
+  const team = await db.team.findFirst({
+    where: {
+      id: teamId,
+      OR: [
+        { ownerId: userId },
+        { members: { some: { userId } } },
+      ],
+    },
+  });
+
+  if (!team) {
+    throw new Error("Team not found");
+  }
+
+  return team;
+}
+
+export async function createTeam(data: CreateTeamInput) {
+  const userId = await requireAuth();
 
   const team = await db.team.create({
     data: {
       name: data.name,
-      ownerId: session.user.id,
+      ownerId: userId,
       members: {
         create: {
-          userId: session.user.id,
+          userId,
           role: "ADMIN",
         },
       },
@@ -47,7 +92,7 @@ export async function createTeam(data: CreateTeamInput) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "CREATE_PROJECT",
     resource: "TEAM",
     resourceId: team.id,
@@ -59,18 +104,13 @@ export async function createTeam(data: CreateTeamInput) {
 }
 
 export async function getTeams() {
-  const session = await auth();
+  const userId = await requireAuth();
 
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Get teams where user is owner or member
   const teams = await db.team.findMany({
     where: {
       OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } },
+        { ownerId: userId },
+        { members: { some: { userId } } },
       ],
     },
     include: {
@@ -102,20 +142,11 @@ export async function getTeams() {
 }
 
 export async function getTeam(teamId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
+  await requireTeamMemberAccess(teamId, userId);
 
   const team = await db.team.findFirst({
-    where: {
-      id: teamId,
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } },
-      ],
-    },
+    where: { id: teamId },
     include: {
       owner: {
         select: { id: true, name: true, email: true },
@@ -146,33 +177,8 @@ export async function getTeam(teamId: string) {
 }
 
 export async function inviteMember(data: InviteMemberInput) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify user is admin of the team
-  const team = await db.team.findFirst({
-    where: {
-      id: data.teamId,
-      OR: [
-        { ownerId: session.user.id },
-        {
-          members: {
-            some: {
-              userId: session.user.id,
-              role: "ADMIN",
-            },
-          },
-        },
-      ],
-    },
-  });
-
-  if (!team) {
-    throw new Error("Team not found or you don't have permission");
-  }
+  const userId = await requireAuth();
+  await requireTeamAdminAccess(data.teamId, userId);
 
   // Find user by email
   const user = await db.user.findUnique({
@@ -212,7 +218,7 @@ export async function inviteMember(data: InviteMemberInput) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "UPDATE_PROJECT",
     resource: "TEAM",
     resourceId: data.teamId,
@@ -225,33 +231,8 @@ export async function inviteMember(data: InviteMemberInput) {
 }
 
 export async function removeMember(teamId: string, memberId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify user is admin of the team
-  const team = await db.team.findFirst({
-    where: {
-      id: teamId,
-      OR: [
-        { ownerId: session.user.id },
-        {
-          members: {
-            some: {
-              userId: session.user.id,
-              role: "ADMIN",
-            },
-          },
-        },
-      ],
-    },
-  });
-
-  if (!team) {
-    throw new Error("Team not found or you don't have permission");
-  }
+  const userId = await requireAuth();
+  const team = await requireTeamAdminAccess(teamId, userId);
 
   // Can't remove the owner
   const member = await db.teamMember.findUnique({
@@ -272,7 +253,7 @@ export async function removeMember(teamId: string, memberId: string) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "UPDATE_PROJECT",
     resource: "TEAM",
     resourceId: teamId,
@@ -287,33 +268,8 @@ export async function updateMemberRole(
   memberId: string,
   role: TeamRole
 ) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify user is admin of the team
-  const team = await db.team.findFirst({
-    where: {
-      id: teamId,
-      OR: [
-        { ownerId: session.user.id },
-        {
-          members: {
-            some: {
-              userId: session.user.id,
-              role: "ADMIN",
-            },
-          },
-        },
-      ],
-    },
-  });
-
-  if (!team) {
-    throw new Error("Team not found or you don't have permission");
-  }
+  const userId = await requireAuth();
+  await requireTeamAdminAccess(teamId, userId);
 
   const member = await db.teamMember.update({
     where: { id: memberId },
@@ -331,38 +287,13 @@ export async function updateMemberRole(
 }
 
 export async function linkProjectToTeam(teamId: string, projectId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   // Verify user is admin of the team and owns the project
-  const [team, project] = await Promise.all([
-    db.team.findFirst({
-      where: {
-        id: teamId,
-        OR: [
-          { ownerId: session.user.id },
-          {
-            members: {
-              some: {
-                userId: session.user.id,
-                role: "ADMIN",
-              },
-            },
-          },
-        ],
-      },
-    }),
-    db.project.findFirst({
-      where: { id: projectId, userId: session.user.id },
-    }),
+  await Promise.all([
+    requireTeamAdminAccess(teamId, userId),
+    requireProjectOwnership(projectId, userId),
   ]);
-
-  if (!team || !project) {
-    throw new Error("Team or project not found");
-  }
 
   await db.teamProject.create({
     data: {
@@ -376,33 +307,8 @@ export async function linkProjectToTeam(teamId: string, projectId: string) {
 }
 
 export async function unlinkProjectFromTeam(teamId: string, projectId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // Verify user is admin of the team
-  const team = await db.team.findFirst({
-    where: {
-      id: teamId,
-      OR: [
-        { ownerId: session.user.id },
-        {
-          members: {
-            some: {
-              userId: session.user.id,
-              role: "ADMIN",
-            },
-          },
-        },
-      ],
-    },
-  });
-
-  if (!team) {
-    throw new Error("Team not found or you don't have permission");
-  }
+  const userId = await requireAuth();
+  await requireTeamAdminAccess(teamId, userId);
 
   await db.teamProject.delete({
     where: {
@@ -418,17 +324,13 @@ export async function unlinkProjectFromTeam(teamId: string, projectId: string) {
 }
 
 export async function deleteTeam(teamId: string) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+  const userId = await requireAuth();
 
   // Only owner can delete team
   const team = await db.team.findFirst({
     where: {
       id: teamId,
-      ownerId: session.user.id,
+      ownerId: userId,
     },
   });
 
@@ -441,7 +343,7 @@ export async function deleteTeam(teamId: string) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "DELETE_PROJECT",
     resource: "TEAM",
     resourceId: teamId,

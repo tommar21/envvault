@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Lock, LogOut, Settings, FolderKey, Key, LockOpen, Menu, X, Users } from "lucide-react";
@@ -70,7 +70,7 @@ export function DashboardShell({ children, user, projects = [] }: DashboardShell
   );
 }
 
-function Sidebar({
+const Sidebar = memo(function Sidebar({
   user,
   projects,
   isOpen,
@@ -187,7 +187,7 @@ function Sidebar({
       </div>
     </aside>
   );
-}
+});
 
 function NavLink({
   href,
