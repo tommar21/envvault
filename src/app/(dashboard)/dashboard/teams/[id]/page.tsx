@@ -173,7 +173,7 @@ export default function TeamDetailPage({
     return null;
   }
 
-  const isOwner = team.ownerId === team.members.find((m) => m.role === "ADMIN")?.userId;
+  const isOwner = team.ownerId === team.members.find((m: Member) => m.role === "ADMIN")?.userId;
 
   return (
     <div>
