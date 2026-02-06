@@ -128,7 +128,7 @@ export default function TeamDetailPage({
 
     try {
       await removeMember(id, member.id);
-      setTeam((prev) =>
+      setTeam((prev: Team | null) =>
         prev
           ? {
               ...prev,
@@ -145,7 +145,7 @@ export default function TeamDetailPage({
   async function handleRoleChange(memberId: string, role: TeamRole) {
     try {
       await updateMemberRole(id, memberId, role);
-      setTeam((prev) =>
+      setTeam((prev: Team | null) =>
         prev
           ? {
               ...prev,
@@ -199,7 +199,7 @@ export default function TeamDetailPage({
           <InviteMemberDialog
             teamId={id}
             onSuccess={(member) =>
-              setTeam((prev) =>
+              setTeam((prev: Team | null) =>
                 prev ? { ...prev, members: [...prev.members, member] } : null
               )
             }
