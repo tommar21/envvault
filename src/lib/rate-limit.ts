@@ -91,11 +91,15 @@ export async function checkRateLimit(
   }
 
   try {
-    // Check remaining tokens first without consuming one.
+    // Try to check remaining tokens without consuming one.
     // This prevents blocked requests from extending the rate limit window.
-    const { remaining, reset } = await limiter.getRemaining(identifier);
-    if (remaining <= 0) {
-      return { success: false, remaining: 0, reset };
+    try {
+      const status = await limiter.getRemaining(identifier);
+      if (status.remaining <= 0) {
+        return { success: false, remaining: 0, reset: status.reset };
+      }
+    } catch {
+      // getRemaining may not be available in all versions - fall through to limit()
     }
 
     const result = await limiter.limit(identifier);
