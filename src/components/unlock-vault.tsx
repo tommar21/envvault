@@ -84,6 +84,7 @@ export function UnlockVault() {
                 value={masterPassword}
                 onChange={(e) => setMasterPassword(e.target.value)}
                 placeholder="Enter your master password"
+                autoComplete="off"
                 required
                 disabled={isLoading}
                 autoFocus
