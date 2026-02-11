@@ -9,6 +9,7 @@ import {
   requireGlobalVariableOwnership,
   requireProjectOwnership,
 } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 
 interface EncryptedVariableData {
   keyEncrypted: string;
@@ -45,6 +46,8 @@ export async function createVariable(
 
     revalidatePath(`/dashboard/projects/${environment.projectId}`);
 
+    await logAudit({ userId, action: "CREATE_VARIABLE", resource: "VARIABLE", resourceId: variable.id });
+
     return variable;
   } catch (error) {
     if (isKnownError(error)) throw error;
@@ -73,6 +76,8 @@ export async function updateVariable(
 
     revalidatePath(`/dashboard/projects/${variable.environment.projectId}`);
 
+    await logAudit({ userId, action: "UPDATE_VARIABLE", resource: "VARIABLE", resourceId: variableId });
+
     return updated;
   } catch (error) {
     if (isKnownError(error)) throw error;
@@ -90,6 +95,8 @@ export async function deleteVariable(variableId: string) {
     });
 
     revalidatePath(`/dashboard/projects/${variable.environment.projectId}`);
+
+    await logAudit({ userId, action: "DELETE_VARIABLE", resource: "VARIABLE", resourceId: variableId });
   } catch (error) {
     if (isKnownError(error)) throw error;
     throw new Error("Failed to delete variable");
@@ -114,6 +121,8 @@ export async function createGlobalVariable(data: EncryptedVariableData) {
     });
 
     revalidatePath("/dashboard/globals");
+
+    await logAudit({ userId, action: "CREATE_GLOBAL", resource: "GLOBAL_VARIABLE", resourceId: variable.id });
 
     return variable;
   } catch (error) {
@@ -143,6 +152,8 @@ export async function updateGlobalVariable(
 
     revalidatePath("/dashboard/globals");
 
+    await logAudit({ userId, action: "UPDATE_GLOBAL", resource: "GLOBAL_VARIABLE", resourceId: variableId });
+
     return updated;
   } catch (error) {
     if (isKnownError(error)) throw error;
@@ -160,6 +171,8 @@ export async function deleteGlobalVariable(variableId: string) {
     });
 
     revalidatePath("/dashboard/globals");
+
+    await logAudit({ userId, action: "DELETE_GLOBAL", resource: "GLOBAL_VARIABLE", resourceId: variableId });
   } catch (error) {
     if (isKnownError(error)) throw error;
     throw new Error("Failed to delete global variable");

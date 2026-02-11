@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { logger } from "@/lib/logger";
+import { logAudit } from "@/lib/audit";
 import { unlockLimiter, checkRateLimit, rateLimitHeaders, formatRetryTime } from "@/lib/rate-limit";
 import { unlockSchema, validateInput } from "@/lib/validation/schemas";
 
@@ -61,11 +62,14 @@ export async function POST(req: Request) {
     const isValid = await bcrypt.compare(masterPassword, user.masterPassword);
 
     if (!isValid) {
+      await logAudit({ userId: session.user.id, action: "UNLOCK_FAILED", request: req });
       return NextResponse.json(
         { error: "Invalid master password" },
         { status: 401 }
       );
     }
+
+    await logAudit({ userId: session.user.id, action: "UNLOCK_VAULT", request: req });
 
     // Return the salt so the client can derive the encryption key
     return NextResponse.json({

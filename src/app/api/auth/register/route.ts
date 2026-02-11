@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { logAudit } from "@/lib/audit";
 import { registerLimiter, getClientIp, checkRateLimit, rateLimitHeaders, formatRetryTime } from "@/lib/rate-limit";
 import { registerSchema, validateInput } from "@/lib/validation/schemas";
 import { generateSalt } from "@/lib/crypto/encryption";
@@ -65,6 +66,8 @@ export async function POST(req: Request) {
         encryptionSalt,
       },
     });
+
+    await logAudit({ userId: user.id, action: "REGISTER", request: req });
 
     return NextResponse.json({
       success: true,

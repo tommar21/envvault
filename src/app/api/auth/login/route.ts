@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { logAudit } from "@/lib/audit";
 import { loginLimiter, getClientIp, checkRateLimit, rateLimitHeaders, formatRetryTime } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
@@ -54,11 +55,14 @@ export async function POST(req: Request) {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      await logAudit({ userId: user.id, action: "LOGIN_FAILED", request: req });
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
+
+    await logAudit({ userId: user.id, action: "LOGIN", request: req });
 
     // Return success with 2FA status
     // The actual session creation is handled by NextAuth signIn

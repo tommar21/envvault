@@ -7,6 +7,7 @@ import {
   requireProjectOwnership,
   requireEnvironmentOwnership,
 } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 
 export async function createProject(data: { name: string; path?: string }) {
   try {
@@ -31,6 +32,8 @@ export async function createProject(data: { name: string; path?: string }) {
     });
 
     revalidatePath("/dashboard");
+
+    await logAudit({ userId, action: "CREATE_PROJECT", resource: "PROJECT", resourceId: project.id });
 
     return project;
   } catch (error) {
@@ -58,6 +61,8 @@ export async function updateProject(
     revalidatePath("/dashboard");
     revalidatePath(`/dashboard/projects/${projectId}`);
 
+    await logAudit({ userId, action: "UPDATE_PROJECT", resource: "PROJECT", resourceId: projectId });
+
     return project;
   } catch (error) {
     if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
@@ -75,6 +80,8 @@ export async function deleteProject(projectId: string) {
     });
 
     revalidatePath("/dashboard");
+
+    await logAudit({ userId, action: "DELETE_PROJECT", resource: "PROJECT", resourceId: projectId });
   } catch (error) {
     if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
     throw new Error("Failed to delete project");

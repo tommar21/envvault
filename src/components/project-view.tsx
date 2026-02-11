@@ -419,6 +419,13 @@ export function ProjectView({ project }: ProjectViewProps) {
                         onCopy={() => clipboard.copy(variable.value, variable.id)}
                         onUpdate={(updated) => handleVariableUpdate(env.id, updated)}
                         onDelete={async () => {
+                          const ok = await confirm({
+                            title: "Delete variable",
+                            description: `Are you sure you want to delete "${variable.key}"? This action cannot be undone.`,
+                            confirmText: "Delete",
+                            variant: "destructive",
+                          });
+                          if (!ok) return;
                           try {
                             await deleteVariable(variable.id);
                             setDecryptedVars((prev) => ({
@@ -501,17 +508,17 @@ const VariableRow = memo(function VariableRow({
         </Button>
 
         {/* Key and Value - stack on mobile, side by side on desktop */}
-        <div className="flex flex-1 flex-col gap-1 md:flex-row md:items-center md:gap-4">
+        <div className="flex flex-1 flex-col gap-1 overflow-hidden md:flex-row md:items-center md:gap-4">
           <div className="min-w-0 md:flex-1">
-            <code className="rounded bg-muted/50 px-2 py-1 text-sm font-semibold">{variable.key}</code>
+            <code className="inline-block max-w-full truncate rounded bg-muted/50 px-2 py-1 text-sm font-semibold align-middle">{variable.key}</code>
             {variable.updatedAt && (
               <span className="ml-2 text-xs text-muted-foreground/60 hidden md:inline">
                 {formatTimeAgo(variable.updatedAt)}
               </span>
             )}
           </div>
-          <div className="min-w-0 md:flex-1">
-            <code className="text-sm text-muted-foreground font-mono break-all">
+          <div className="min-w-0 md:flex-1 overflow-hidden">
+            <code className="block truncate text-sm text-muted-foreground font-mono">
               {variable.isSecret && !isVisible
                 ? "••••••••••••"
                 : isVisible || !variable.isSecret
