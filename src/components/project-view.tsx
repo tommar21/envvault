@@ -48,6 +48,18 @@ import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import type { DecryptedVar, ProjectWithRelations } from "@/types/variables";
 
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
 interface ProjectViewProps {
   project: ProjectWithRelations;
 }
@@ -84,7 +96,7 @@ export function ProjectView({ project }: ProjectViewProps) {
               v.ivValue,
               cryptoKey
             );
-            return { id: v.id, key, value, isSecret: v.isSecret };
+            return { id: v.id, key, value, isSecret: v.isSecret, updatedAt: v.updatedAt };
           })
         );
 
@@ -428,6 +440,11 @@ const VariableRow = memo(function VariableRow({
         <div className="flex flex-1 flex-col gap-1 md:flex-row md:items-center md:gap-4">
           <div className="min-w-0 md:flex-1">
             <code className="rounded bg-muted/50 px-2 py-1 text-sm font-semibold">{variable.key}</code>
+            {variable.updatedAt && (
+              <span className="ml-2 text-xs text-muted-foreground/60 hidden md:inline">
+                {formatTimeAgo(variable.updatedAt)}
+              </span>
+            )}
           </div>
           <div className="min-w-0 md:flex-1">
             <code className="text-sm text-muted-foreground font-mono break-all">

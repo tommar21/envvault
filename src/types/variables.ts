@@ -8,6 +8,7 @@ export interface DecryptedVar {
   key: string;
   value: string;
   isSecret: boolean;
+  updatedAt?: Date;
 }
 
 /**
