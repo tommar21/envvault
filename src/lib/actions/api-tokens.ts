@@ -46,7 +46,7 @@ export async function createApiToken(data: CreateTokenInput) {
 
   await logAudit({
     userId,
-    action: "CREATE_VARIABLE",
+    action: "CREATE_API_TOKEN",
     resource: "API_TOKEN",
     resourceId: apiToken.id,
     metadata: { name: data.name, permissions: data.permissions },
@@ -103,7 +103,7 @@ export async function deleteApiToken(tokenId: string) {
 
   await logAudit({
     userId,
-    action: "DELETE_VARIABLE",
+    action: "DELETE_API_TOKEN",
     resource: "API_TOKEN",
     resourceId: tokenId,
     metadata: { name: token.name },

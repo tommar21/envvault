@@ -42,6 +42,16 @@ export const loginLimiter = redis
     })
   : null;
 
+// Rate limiter for API token validation - 60 attempts per 1 minute per IP
+export const apiTokenLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(60, "1 m"),
+      analytics: true,
+      prefix: "ratelimit:api-token",
+    })
+  : null;
+
 // Helper to get IP from request
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");

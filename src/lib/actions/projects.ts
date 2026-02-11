@@ -9,115 +9,145 @@ import {
 } from "@/lib/auth-helpers";
 
 export async function createProject(data: { name: string; path?: string }) {
-  const userId = await requireAuth();
+  try {
+    const userId = await requireAuth();
 
-  const project = await db.project.create({
-    data: {
-      userId,
-      name: data.name,
-      path: data.path || null,
-      environments: {
-        create: [
-          { name: "development" },
-          { name: "staging" },
-          { name: "production" },
-        ],
+    const project = await db.project.create({
+      data: {
+        userId,
+        name: data.name,
+        path: data.path || null,
+        environments: {
+          create: [
+            { name: "development" },
+            { name: "staging" },
+            { name: "production" },
+          ],
+        },
       },
-    },
-    include: {
-      environments: true,
-    },
-  });
+      include: {
+        environments: true,
+      },
+    });
 
-  revalidatePath("/dashboard");
+    revalidatePath("/dashboard");
 
-  return project;
+    return project;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") throw error;
+    throw new Error("Failed to create project");
+  }
 }
 
 export async function updateProject(
   projectId: string,
   data: { name?: string; path?: string }
 ) {
-  const userId = await requireAuth();
-  await requireProjectOwnership(projectId, userId);
+  try {
+    const userId = await requireAuth();
+    await requireProjectOwnership(projectId, userId);
 
-  const project = await db.project.update({
-    where: { id: projectId },
-    data: {
-      name: data.name,
-      path: data.path,
-    },
-  });
+    const project = await db.project.update({
+      where: { id: projectId },
+      data: {
+        name: data.name,
+        path: data.path,
+      },
+    });
 
-  revalidatePath("/dashboard");
-  revalidatePath(`/dashboard/projects/${projectId}`);
+    revalidatePath("/dashboard");
+    revalidatePath(`/dashboard/projects/${projectId}`);
 
-  return project;
+    return project;
+  } catch (error) {
+    if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
+    throw new Error("Failed to update project");
+  }
 }
 
 export async function deleteProject(projectId: string) {
-  const userId = await requireAuth();
-  await requireProjectOwnership(projectId, userId);
+  try {
+    const userId = await requireAuth();
+    await requireProjectOwnership(projectId, userId);
 
-  await db.project.delete({
-    where: { id: projectId },
-  });
+    await db.project.delete({
+      where: { id: projectId },
+    });
 
-  revalidatePath("/dashboard");
+    revalidatePath("/dashboard");
+  } catch (error) {
+    if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
+    throw new Error("Failed to delete project");
+  }
 }
 
 export async function getProject(projectId: string) {
-  const userId = await requireAuth();
+  try {
+    const userId = await requireAuth();
 
-  const project = await db.project.findFirst({
-    where: { id: projectId, userId },
-    include: {
-      environments: {
-        include: {
-          variables: true,
+    const project = await db.project.findFirst({
+      where: { id: projectId, userId },
+      include: {
+        environments: {
+          include: {
+            variables: true,
+          },
+          orderBy: {
+            name: "asc",
+          },
         },
-        orderBy: {
-          name: "asc",
+        linkedGlobals: {
+          include: {
+            global: true,
+          },
         },
       },
-      linkedGlobals: {
-        include: {
-          global: true,
-        },
-      },
-    },
-  });
+    });
 
-  if (!project) {
-    throw new Error("Project not found");
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    return project;
+  } catch (error) {
+    if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
+    throw new Error("Failed to load project");
   }
-
-  return project;
 }
 
 export async function createEnvironment(projectId: string, name: string) {
-  const userId = await requireAuth();
-  await requireProjectOwnership(projectId, userId);
+  try {
+    const userId = await requireAuth();
+    await requireProjectOwnership(projectId, userId);
 
-  const environment = await db.environment.create({
-    data: {
-      projectId,
-      name,
-    },
-  });
+    const environment = await db.environment.create({
+      data: {
+        projectId,
+        name,
+      },
+    });
 
-  revalidatePath(`/dashboard/projects/${projectId}`);
+    revalidatePath(`/dashboard/projects/${projectId}`);
 
-  return environment;
+    return environment;
+  } catch (error) {
+    if (error instanceof Error && ["Unauthorized", "Project not found"].includes(error.message)) throw error;
+    throw new Error("Failed to create environment");
+  }
 }
 
 export async function deleteEnvironment(environmentId: string) {
-  const userId = await requireAuth();
-  const environment = await requireEnvironmentOwnership(environmentId, userId);
+  try {
+    const userId = await requireAuth();
+    const environment = await requireEnvironmentOwnership(environmentId, userId);
 
-  await db.environment.delete({
-    where: { id: environmentId },
-  });
+    await db.environment.delete({
+      where: { id: environmentId },
+    });
 
-  revalidatePath(`/dashboard/projects/${environment.projectId}`);
+    revalidatePath(`/dashboard/projects/${environment.projectId}`);
+  } catch (error) {
+    if (error instanceof Error && ["Unauthorized", "Environment not found"].includes(error.message)) throw error;
+    throw new Error("Failed to delete environment");
+  }
 }

@@ -23,7 +23,12 @@ export type AuditAction =
   | "ENABLE_2FA"
   | "DISABLE_2FA"
   | "CHANGE_MASTER_PASSWORD"
-  | "REGISTER";
+  | "REGISTER"
+  | "CREATE_TEAM"
+  | "UPDATE_TEAM"
+  | "DELETE_TEAM"
+  | "CREATE_API_TOKEN"
+  | "DELETE_API_TOKEN";
 
 export type AuditResource =
   | "USER"

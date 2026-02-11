@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateApiToken } from "@/lib/actions/api-tokens";
+import { apiTokenLimiter, checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export interface ApiAuthResult {
   authorized: boolean;
@@ -14,6 +15,13 @@ export interface ApiAuthResult {
 export async function authenticateApiRequest(
   request: Request
 ): Promise<ApiAuthResult> {
+  // Rate limit API token validation attempts per IP
+  const ip = getClientIp(request);
+  const rateLimit = await checkRateLimit(apiTokenLimiter, ip);
+  if (!rateLimit.success) {
+    return { authorized: false, error: "Too many API requests. Please try again later." };
+  }
+
   const authHeader = request.headers.get("Authorization");
 
   if (!authHeader) {

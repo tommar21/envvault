@@ -81,6 +81,45 @@ export async function POST(req: Request) {
     // Hash the new master password
     const newHashedPassword = await bcrypt.hash(body.newMasterPasswordHash, 12);
 
+    // Verify ownership of all variables before updating
+    if (body.variables.length > 0) {
+      const variableIds = body.variables.map((v) => v.id);
+      const ownedVariables = await db.variable.findMany({
+        where: {
+          id: { in: variableIds },
+          environment: { project: { userId: session.user.id } },
+        },
+        select: { id: true },
+      });
+      const ownedIds = new Set(ownedVariables.map((v) => v.id));
+      const unauthorized = variableIds.filter((id) => !ownedIds.has(id));
+      if (unauthorized.length > 0) {
+        return NextResponse.json(
+          { error: "Unauthorized variable access" },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (body.globalVariables.length > 0) {
+      const globalIds = body.globalVariables.map((v) => v.id);
+      const ownedGlobals = await db.globalVariable.findMany({
+        where: {
+          id: { in: globalIds },
+          userId: session.user.id,
+        },
+        select: { id: true },
+      });
+      const ownedGlobalIds = new Set(ownedGlobals.map((v) => v.id));
+      const unauthorized = globalIds.filter((id) => !ownedGlobalIds.has(id));
+      if (unauthorized.length > 0) {
+        return NextResponse.json(
+          { error: "Unauthorized variable access" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Update everything in a transaction
     await db.$transaction(async (tx) => {
       // Update user with new salt and hashed password
