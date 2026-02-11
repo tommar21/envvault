@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2, Key, Clock, Shield, ShieldCheck, ShieldAlert, AlertTriangle, ChevronRight, Code } from "lucide-react";
+import { Loader2, Key, Clock, Shield, ShieldCheck, ShieldAlert, AlertTriangle, ChevronRight, Code, Activity } from "lucide-react";
 import Link from "next/link";
 import { useVaultStore } from "@/stores/vault-store";
 import { toast } from "sonner";
@@ -214,6 +214,24 @@ export default function SettingsPage() {
               </div>
               <CardDescription>
                 Create tokens for programmatic access to your secrets
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* Activity Log */}
+        <Link href="/dashboard/settings/activity">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  <CardTitle>Activity Log</CardTitle>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <CardDescription>
+                View recent account activity and security events
               </CardDescription>
             </CardHeader>
           </Card>

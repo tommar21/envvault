@@ -17,11 +17,12 @@ import { encryptVariable } from "@/lib/crypto/encryption";
 import { createVariable } from "@/lib/actions/variables";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import type { DecryptedVar } from "@/types/variables";
 
 interface AddVariableDialogProps {
   environmentId: string;
   cryptoKey: CryptoKey | null;
-  onSuccess: () => void;
+  onSuccess: (newVar: DecryptedVar) => void;
 }
 
 export const AddVariableDialog = memo(function AddVariableDialog({
@@ -46,14 +47,20 @@ export const AddVariableDialog = memo(function AddVariableDialog({
     try {
       const encrypted = await encryptVariable(key, value, cryptoKey);
 
-      await createVariable(environmentId, {
+      const variable = await createVariable(environmentId, {
         ...encrypted,
         isSecret,
       });
 
       toast.success("Variable added");
       setOpen(false);
-      onSuccess();
+      onSuccess({
+        id: variable.id,
+        key,
+        value,
+        isSecret,
+        updatedAt: variable.updatedAt,
+      });
     } catch (error) {
       logger.error("Failed to add variable", error);
       toast.error("Failed to add variable");

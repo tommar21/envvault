@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo, useCallback, useEffect } from "react";
+import { useState, useMemo, memo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   Download,
@@ -32,6 +33,8 @@ import {
   CheckSquare,
   Square,
   FileCode,
+  Search,
+  X,
 } from "lucide-react";
 import { useVaultStore } from "@/stores/vault-store";
 import { decryptVariable } from "@/lib/crypto/encryption";
@@ -41,6 +44,7 @@ import { ImportEnvDialog } from "@/components/import-env-dialog";
 import { EditVariableDialog } from "@/components/dialogs/edit-variable-dialog";
 import { AddVariableDialog } from "@/components/dialogs/add-variable-dialog";
 import { AddEnvironmentDialog } from "@/components/dialogs/add-environment-dialog";
+import { CopyEnvironmentDialog } from "@/components/dialogs/copy-environment-dialog";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
@@ -71,6 +75,7 @@ export function ProjectView({ project }: ProjectViewProps) {
   const [decryptedVars, setDecryptedVars] = useState<Record<string, DecryptedVar[]>>({});
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Use custom hooks for toggle sets and clipboard
@@ -109,9 +114,18 @@ export function ProjectView({ project }: ProjectViewProps) {
     [cryptoKey, project.environments]
   );
 
+  // Filtered variables for the active environment
+  const filteredVars = useMemo(() => {
+    const vars = decryptedVars[activeEnv] || [];
+    if (!searchQuery.trim()) return vars;
+    const query = searchQuery.toLowerCase();
+    return vars.filter((v) => v.key.toLowerCase().includes(query));
+  }, [decryptedVars, activeEnv, searchQuery]);
+
   // Load variables when tab changes
   function handleTabChange(envId: string) {
     setActiveEnv(envId);
+    setSearchQuery("");
   }
 
   // Initialize decryption when activeEnv or cryptoKey changes
@@ -257,12 +271,11 @@ export function ProjectView({ project }: ProjectViewProps) {
             <AddVariableDialog
               environmentId={activeEnv}
               cryptoKey={cryptoKey}
-              onSuccess={() => {
-                setDecryptedVars((prev) => {
-                  const next = { ...prev };
-                  delete next[activeEnv];
-                  return next;
-                });
+              onSuccess={(newVar) => {
+                setDecryptedVars((prev) => ({
+                  ...prev,
+                  [activeEnv]: [...(prev[activeEnv] || []), newVar],
+                }));
               }}
             />
           </div>
@@ -280,6 +293,21 @@ export function ProjectView({ project }: ProjectViewProps) {
                         {decryptedVars[env.id]?.length || 0} variables
                       </CardDescription>
                     </div>
+                    {/* Copy Environment */}
+                    <CopyEnvironmentDialog
+                      sourceEnvId={env.id}
+                      sourceEnvName={env.name}
+                      environments={project.environments.map((e) => ({ id: e.id, name: e.name }))}
+                      cryptoKey={cryptoKey}
+                      decryptedVars={decryptedVars[env.id] || []}
+                      onSuccess={(targetEnvId, copiedVars) => {
+                        setDecryptedVars((prev) => ({
+                          ...prev,
+                          [targetEnvId]: [...(prev[targetEnvId] || []), ...copiedVars],
+                        }));
+                        setActiveEnv(targetEnvId);
+                      }}
+                    />
                     {/* Delete Environment - only show if more than 1 environment */}
                     {project.environments.length > 1 && (
                       <DeleteEnvironmentButton
@@ -348,8 +376,37 @@ export function ProjectView({ project }: ProjectViewProps) {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {decryptedVars[env.id].map((variable) => (
+                  <div className="space-y-3">
+                    {/* Search bar - only for active tab with variables */}
+                    {env.id === activeEnv && decryptedVars[env.id].length > 3 && (
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="Filter by key name..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 h-9"
+                          />
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        {searchQuery && (
+                          <span className="whitespace-nowrap text-sm text-muted-foreground">
+                            {filteredVars.length} of {decryptedVars[env.id].length}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Variable list */}
+                    <div className="space-y-2">
+                    {(env.id === activeEnv ? filteredVars : decryptedVars[env.id]).map((variable) => (
                       <VariableRow
                         key={variable.id}
                         variable={variable}
@@ -375,6 +432,13 @@ export function ProjectView({ project }: ProjectViewProps) {
                         }}
                       />
                     ))}
+                    </div>
+                    {/* No search results */}
+                    {env.id === activeEnv && searchQuery && filteredVars.length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        No variables matching &quot;{searchQuery}&quot;
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>
