@@ -70,4 +70,4 @@ Required in `.env`:
 
 - **Vercel**: Auto-deploys on push to `main`
 - **URL**: https://mysecretbox.vercel.app
-- **Repo**: https://github.com/tommar21/secret-box
+- **Repo**: https://github.com/cogotemartinez/secret-box

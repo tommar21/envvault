@@ -2,7 +2,7 @@
 
 Secure environment variables management with end-to-end encryption. Your secrets never leave your browser unencrypted.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/tommar21/secret-box)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/cogotemartinez/secret-box)
 
 **[Live Demo →](https://mysecretbox.vercel.app)**
 
@@ -73,7 +73,7 @@ Master Password
 
 ```bash
 # Clone
-git clone https://github.com/tommar21/secret-box.git
+git clone https://github.com/cogotemartinez/secret-box.git
 cd secret-box
 
 # Install
@@ -106,7 +106,7 @@ npm run dev
 
 One-click deploy to Vercel:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/tommar21/secret-box)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/cogotemartinez/secret-box)
 
 Or manually:
 

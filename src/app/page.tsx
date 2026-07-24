@@ -191,7 +191,7 @@ export default function Home() {
                     </Button>
                   </motion.div>
                 </Link>
-                <Link href="https://github.com/tommar21/secret-box" target="_blank">
+                <Link href="https://github.com/cogotemartinez/secret-box" target="_blank">
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button variant="outline" size="lg">
                       <Github className="mr-2 h-4 w-4" />
@@ -448,7 +448,7 @@ export default function Home() {
             </motion.div>
             <div className="flex items-center gap-6">
               {[
-                { href: "https://github.com/tommar21/secret-box", label: "GitHub", external: true },
+                { href: "https://github.com/cogotemartinez/secret-box", label: "GitHub", external: true },
                 { href: "#features", label: "Features" },
                 { href: "#security", label: "Security" }
               ].map((link) => (
